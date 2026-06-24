@@ -57,6 +57,7 @@ const state = {
 
 const elements = {
   summaryText: document.querySelector("#summaryText"),
+  cloudStatusText: document.querySelector("#cloudStatusText"),
   addProjectButton: document.querySelector("#addProjectButton"),
   addArchiveButton: document.querySelector("#addArchiveButton"),
   addTodayButton: document.querySelector("#addTodayButton"),
@@ -336,7 +337,11 @@ function filteredProjects() {
 
 function renderSummary() {
   const visibleCount = filteredProjects().length;
-  elements.summaryText.textContent = `${state.projects.length} 个项目，项目库显示 ${visibleCount} 个 · ${state.cloudStatus}`;
+  elements.summaryText.textContent = `${state.projects.length} 个项目，项目库显示 ${visibleCount} 个`;
+  elements.cloudStatusText.textContent = state.cloudStatus;
+  elements.cloudStatusText.className = `cloud-status ${
+    state.cloudStatus.includes("失败") ? "cloud-error" : "cloud-ok"
+  }`;
 }
 
 function createMeta(label, value) {

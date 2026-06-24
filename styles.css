@@ -92,6 +92,28 @@ h1 {
   margin-top: 6px;
 }
 
+.cloud-status {
+  display: inline-flex;
+  width: fit-content;
+  margin-top: 8px;
+  border-radius: 999px;
+  padding: 5px 10px;
+  background: rgba(52, 120, 246, 0.1);
+  color: #2457b8;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.cloud-status.cloud-ok {
+  background: rgba(52, 199, 89, 0.13);
+  color: #18733a;
+}
+
+.cloud-status.cloud-error {
+  background: rgba(255, 55, 95, 0.12);
+  color: #ad1f45;
+}
+
 .toolbar {
   display: grid;
   grid-template-columns: auto minmax(220px, 1fr) 150px 150px 150px;

@@ -50,6 +50,33 @@ GitHub Pages 只负责打开网页；Supabase 负责保存数据。
 - `云端读取失败：401` 或 `403`：通常是 API key 或表权限需要检查
 - `云端保存失败，本机已保存`：当前浏览器本地已保存，但没有写入 Supabase
 
+如果不同设备之间不同步，优先检查页面顶部的云端状态。如果没有出现云端状态，通常是 GitHub Pages 还在加载旧文件，等待 1-2 分钟后刷新，或在网址后加 `?v=2` 再打开。
+
+如果出现 `401` 或 `403`，需要在 Supabase 的 SQL Editor 里开启这张表的公开读写策略：
+
+```sql
+alter table workstation_data enable row level security;
+
+create policy "allow read workstation data"
+on workstation_data
+for select
+to anon
+using (id = 'main');
+
+create policy "allow insert workstation data"
+on workstation_data
+for insert
+to anon
+with check (id = 'main');
+
+create policy "allow update workstation data"
+on workstation_data
+for update
+to anon
+using (id = 'main')
+with check (id = 'main');
+```
+
 ## Supabase 表结构
 
 需要先在 Supabase SQL Editor 里创建表：
