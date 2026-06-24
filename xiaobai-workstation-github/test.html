@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>核心逻辑测试</title>
+    <style>
+      body {
+        margin: 32px;
+        color: #18202a;
+        font-family: "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+      }
+
+      h1 {
+        margin-bottom: 18px;
+      }
+
+      .pass {
+        color: #176b5f;
+      }
+
+      .fail {
+        color: #b42318;
+      }
+
+      li {
+        margin: 8px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>核心逻辑测试</h1>
+    <ul id="results"></ul>
+    <script type="module">
+      import {
+        ACCOUNT_OPTIONS,
+        DIRECTOR_OPTIONS,
+        STATUS_OPTIONS,
+        TALENT_OPTIONS,
+        TYPE_OPTIONS,
+        buildCalendarEvents,
+        createLibraryProjectDraft,
+        evaluateViralStatus,
+        normalizeLikeCount,
+        projectColorIndex,
+        createProjectDraftForDate,
+        createProject,
+        filterProjects,
+        getDailyAgenda,
+        getWeekday,
+        mergeOptionList,
+        addOptionToList,
+        rescheduleProjectDate,
+        validateProject,
+      } from "./project-core.js";
+
+      const tests = [];
+      const results = document.querySelector("#results");
+
+      function test(name, fn) {
+        tests.push({ name, fn });
+      }
+
+      function assertEqual(actual, expected) {
+        if (actual !== expected) {
+          throw new Error(`expected ${expected}, got ${actual}`);
+        }
+      }
+
+      function assertDeepEqual(actual, expected) {
+        const actualText = JSON.stringify(actual);
+        const expectedText = JSON.stringify(expected);
+        if (actualText !== expectedText) {
+          throw new Error(`expected ${expectedText}, got ${actualText}`);
+        }
+      }
+
+      test("项目颜色编号对同一项目保持稳定", () => {
+        const project = createProject({ id: "project-asmr", title: "ASMR" });
+        const colorIndex = projectColorIndex(project, 8);
+
+        assertEqual(colorIndex, projectColorIndex(project, 8));
+        assertEqual(Number.isInteger(colorIndex), true);
+        assertEqual(colorIndex >= 0, true);
+        assertEqual(colorIndex < 8, true);
+      });
+
+      test("like counts are stored for three release channels", () => {
+        const project = createProject({ douyinLikes: "3k", videoLikes: "1,200", redbookLikes: "2w" });
+        assertEqual(project.douyinLikes, 3000);
+        assertEqual(project.videoLikes, 1200);
+        assertEqual(project.redbookLikes, 20000);
+        assertEqual(normalizeLikeCount("-10"), 0);
+      });
+
+      test("viral status follows channel thresholds", () => {
+        assertEqual(evaluateViralStatus(createProject({ douyinLikes: 2999 })).level, "none");
+        assertEqual(evaluateViralStatus(createProject({ douyinLikes: 3000 })).level, "small");
+        assertEqual(evaluateViralStatus(createProject({ videoLikes: 1000 })).level, "small");
+        assertEqual(evaluateViralStatus(createProject({ redbookLikes: 1000 })).level, "small");
+        assertEqual(evaluateViralStatus(createProject({ douyinLikes: 20000 })).level, "big");
+        assertEqual(evaluateViralStatus(createProject({ videoLikes: 5000 })).level, "big");
+        assertEqual(evaluateViralStatus(createProject({ redbookLikes: 5000 })).level, "big");
+      });
+
+      test("archive-only library draft does not create calendar work", () => {
+        const project = createLibraryProjectDraft();
+        assertEqual(project.status, "已发布");
+        assertEqual(project.shootDate, "");
+        assertEqual(project.editStartDate, "");
+        assertEqual(project.editEndDate, "");
+        assertEqual(project.releaseDate, "");
+        assertDeepEqual(buildCalendarEvents([project]), []);
+        assertDeepEqual(getDailyAgenda([project], "2026-06-24"), { shooting: [], editing: [], release: [] });
+      });
+
+      test("选项匹配工作流名单", () => {
+        assertDeepEqual(TYPE_OPTIONS, ["原创", "预告", "商业"]);
+        assertDeepEqual(DIRECTOR_OPTIONS, ["丸子", "11", "小青", "瑞克"]);
+        assertDeepEqual(TALENT_OPTIONS, ["小新", "魏老师", "太医", "无人出镜"]);
+        assertDeepEqual(STATUS_OPTIONS, ["待拍摄", "剪辑中", "待发布", "已发布"]);
+        assertDeepEqual(ACCOUNT_OPTIONS, ["三楼", "丁医", "研究所", "丁妈"]);
+      });
+
+      test("默认选项和新增选项会合并去重", () => {
+        assertDeepEqual(mergeOptionList(["丸子", "瑞克"], ["瑞克", "新编导", "  "]), ["丸子", "瑞克", "新编导"]);
+      });
+
+      test("新增选项会去掉空白并避免重复", () => {
+        assertDeepEqual(addOptionToList(["丸子"], " 新编导 "), ["丸子", "新编导"]);
+        assertDeepEqual(addOptionToList(["丸子"], "丸子"), ["丸子"]);
+        assertDeepEqual(addOptionToList(["丸子"], ""), ["丸子"]);
+      });
+
+      test("剪辑结束默认等于开始日期", () => {
+        const project = createProject({ title: "品牌短片", type: "商业", editStartDate: "2026-06-25" });
+        assertEqual(project.editEndDate, "2026-06-25");
+      });
+
+      test("发布账号会保存到项目", () => {
+        const project = createProject({ title: "预告片", type: "预告", releaseAccount: "三楼" });
+        assertEqual(project.releaseAccount, "三楼");
+      });
+
+      test("星期计算为中文", () => {
+        assertEqual(getWeekday("2026-06-23"), "星期二");
+      });
+
+      test("剪辑结束不能早于开始", () => {
+        const result = validateProject({
+          title: "发布预告",
+          type: "预告",
+          editStartDate: "2026-06-26",
+          editEndDate: "2026-06-25",
+        });
+        assertEqual(result.valid, false);
+        assertDeepEqual(result.errors, ["剪辑结束日期不能早于剪辑开始日期"]);
+      });
+
+      test("筛选支持搜索、状态、类型和发布账号", () => {
+        const projects = [
+          createProject({ title: "原创探店", type: "原创", director: "丸子", releaseAccount: "三楼", status: "待拍摄" }),
+          createProject({ title: "618商业片", type: "商业", director: "瑞克", releaseAccount: "丁医", status: "待发布" }),
+        ];
+        const result = filterProjects(projects, {
+          search: "瑞克",
+          status: "待发布",
+          type: "商业",
+          releaseAccount: "丁医",
+        });
+        assertEqual(result.length, 1);
+        assertEqual(result[0].title, "618商业片");
+      });
+
+      test("日历生成拍摄、剪辑和发布事件", () => {
+        const project = createProject({
+          title: "新品发布",
+          type: "商业",
+          shootDate: "2026-06-23",
+          editStartDate: "2026-06-24",
+          editEndDate: "2026-06-25",
+          releaseDate: "2026-06-28",
+        });
+        const events = buildCalendarEvents([project]);
+        assertDeepEqual(
+          events.map((event) => `${event.kind}:${event.date}:${event.title}`),
+          [
+            "shoot:2026-06-23:拍摄 新品发布",
+            "edit:2026-06-24:剪辑 新品发布",
+            "edit:2026-06-25:剪辑 新品发布",
+            "release:2026-06-28:发布 新品发布",
+          ],
+        );
+      });
+
+      test("跨周剪辑在日历里跳过周末", () => {
+        const project = createProject({
+          title: "跨周剪辑",
+          type: "原创",
+          editStartDate: "2026-06-19",
+          editEndDate: "2026-06-23",
+        });
+        const events = buildCalendarEvents([project]);
+        assertDeepEqual(
+          events.map((event) => `${event.kind}:${event.date}:${event.title}`),
+          [
+            "edit:2026-06-19:剪辑 跨周剪辑",
+            "edit:2026-06-22:剪辑 跨周剪辑",
+            "edit:2026-06-23:剪辑 跨周剪辑",
+          ],
+        );
+      });
+
+      test("今日安排按拍摄、剪辑和发布分组", () => {
+        const projects = [
+          createProject({ title: "今日拍摄", type: "原创", shootDate: "2026-06-23" }),
+          createProject({ title: "今日剪辑", type: "商业", editStartDate: "2026-06-22", editEndDate: "2026-06-24" }),
+          createProject({ title: "今日发布", type: "预告", releaseDate: "2026-06-23" }),
+          createProject({ title: "明天拍摄", type: "原创", shootDate: "2026-06-24" }),
+        ];
+        const agenda = getDailyAgenda(projects, "2026-06-23");
+        assertDeepEqual(agenda.shooting.map((project) => project.title), ["今日拍摄"]);
+        assertDeepEqual(agenda.editing.map((project) => project.title), ["今日剪辑"]);
+        assertDeepEqual(agenda.release.map((project) => project.title), ["今日发布"]);
+      });
+
+      test("今日剪辑在周末不显示，但拍摄和发布仍显示", () => {
+        const projects = [
+          createProject({ title: "跨周剪辑", type: "原创", editStartDate: "2026-06-19", editEndDate: "2026-06-23" }),
+          createProject({ title: "周末拍摄", type: "商业", shootDate: "2026-06-20" }),
+          createProject({ title: "周末发布", type: "预告", releaseDate: "2026-06-20" }),
+        ];
+        const agenda = getDailyAgenda(projects, "2026-06-20");
+        assertDeepEqual(agenda.editing.map((project) => project.title), []);
+        assertDeepEqual(agenda.shooting.map((project) => project.title), ["周末拍摄"]);
+        assertDeepEqual(agenda.release.map((project) => project.title), ["周末发布"]);
+      });
+
+      test("日历快捷添加按类型预填日期", () => {
+        assertEqual(createProjectDraftForDate("2026-06-23", "shoot").shootDate, "2026-06-23");
+        assertEqual(createProjectDraftForDate("2026-06-23", "edit").editStartDate, "2026-06-23");
+        assertEqual(createProjectDraftForDate("2026-06-23", "edit").editEndDate, "2026-06-23");
+        assertEqual(createProjectDraftForDate("2026-06-23", "release").releaseDate, "2026-06-23");
+      });
+
+      test("拖动改期会更新拍摄和发布日期", () => {
+        const project = createProject({
+          title: "改期项目",
+          type: "原创",
+          shootDate: "2026-06-23",
+          releaseDate: "2026-06-30",
+        });
+        assertEqual(rescheduleProjectDate(project, "shoot", "2026-06-23", "2026-06-24").shootDate, "2026-06-24");
+        assertEqual(rescheduleProjectDate(project, "release", "2026-06-30", "2026-07-01").releaseDate, "2026-07-01");
+      });
+
+      test("拖动剪辑会整体平移剪辑区间", () => {
+        const project = createProject({
+          title: "剪辑改期",
+          type: "商业",
+          editStartDate: "2026-06-19",
+          editEndDate: "2026-06-23",
+        });
+        const moved = rescheduleProjectDate(project, "edit", "2026-06-22", "2026-06-25");
+        assertEqual(moved.editStartDate, "2026-06-22");
+        assertEqual(moved.editEndDate, "2026-06-26");
+      });
+
+      test("剪辑拖到周末会落到下一个工作日", () => {
+        const project = createProject({
+          title: "周末拖动",
+          type: "商业",
+          editStartDate: "2026-06-19",
+          editEndDate: "2026-06-23",
+        });
+        const moved = rescheduleProjectDate(project, "edit", "2026-06-19", "2026-06-20");
+        assertEqual(moved.editStartDate, "2026-06-22");
+        assertEqual(moved.editEndDate, "2026-06-26");
+      });
+
+      let failures = 0;
+      for (const item of tests) {
+        const li = document.createElement("li");
+        try {
+          item.fn();
+          li.className = "pass";
+          li.textContent = `通过：${item.name}`;
+        } catch (error) {
+          failures += 1;
+          li.className = "fail";
+          li.textContent = `失败：${item.name} - ${error.message}`;
+        }
+        results.append(li);
+      }
+
+      document.title = failures === 0 ? "核心逻辑测试：全部通过" : `核心逻辑测试：${failures} 个失败`;
+      document.body.dataset.testStatus = failures === 0 ? "pass" : "fail";
+    </script>
+  </body>
+</html>

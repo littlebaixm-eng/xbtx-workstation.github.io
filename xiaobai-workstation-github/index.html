@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>小白同学工作站</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div>
+          <h1>小白同学工作站</h1>
+          <p id="summaryText">0 个项目</p>
+        </div>
+        <button class="primary-button" id="addProjectButton" type="button">新增片子</button>
+      </header>
+
+      <section class="toolbar" aria-label="筛选工具">
+        <div class="view-tabs" role="tablist" aria-label="视图切换">
+          <button class="tab active" data-view="today" type="button">今日</button>
+          <button class="tab" data-view="table" type="button">项目库</button>
+          <button class="tab" data-view="calendar" type="button">日历</button>
+        </div>
+        <label>
+          <span>搜索</span>
+          <input id="searchInput" type="search" placeholder="项目、编导、出镜人" />
+        </label>
+        <label>
+          <span>状态</span>
+          <select id="statusFilter"></select>
+        </label>
+        <label>
+          <span>类型</span>
+          <select id="typeFilter"></select>
+        </label>
+        <label>
+          <span>发布账号</span>
+          <select id="accountFilter"></select>
+        </label>
+      </section>
+
+      <section id="todayView" class="view-panel today-panel">
+        <div class="today-hero">
+          <div>
+            <p class="eyebrow">今天</p>
+            <h2 id="todayTitle">今日安排</h2>
+            <p id="todaySummary">拍摄 0 · 剪辑 0 · 发布 0</p>
+          </div>
+          <button class="secondary-button" id="addTodayButton" type="button">添加今日任务</button>
+        </div>
+        <div class="today-grid">
+          <section class="agenda-column agenda-shoot">
+            <header>
+              <span class="agenda-icon"></span>
+              <div>
+                <h3>今天拍摄</h3>
+                <p id="shootingCount">0 项</p>
+              </div>
+            </header>
+            <div id="shootingAgenda" class="agenda-list"></div>
+          </section>
+          <section class="agenda-column agenda-edit">
+            <header>
+              <span class="agenda-icon"></span>
+              <div>
+                <h3>今天剪辑</h3>
+                <p id="editingCount">0 项</p>
+              </div>
+            </header>
+            <div id="editingAgenda" class="agenda-list"></div>
+          </section>
+          <section class="agenda-column agenda-release">
+            <header>
+              <span class="agenda-icon"></span>
+              <div>
+                <h3>今天发布</h3>
+                <p id="releaseCount">0 项</p>
+              </div>
+            </header>
+            <div id="releaseAgenda" class="agenda-list"></div>
+          </section>
+        </div>
+      </section>
+
+      <section id="tableView" class="view-panel hidden">
+        <div class="table-head">
+          <div>
+            <p class="eyebrow">项目库</p>
+            <h2>作品归档</h2>
+          </div>
+          <button class="secondary-button" id="addArchiveButton" type="button">新增归档项目</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>项目</th>
+                <th>类型</th>
+                <th>发布账号</th>
+                <th>编导 / 出镜</th>
+                <th>状态</th>
+                <th>点赞</th>
+                <th>爆款</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="projectTableBody"></tbody>
+          </table>
+        </div>
+        <p class="empty-state" id="emptyState" hidden>还没有匹配的片子。</p>
+      </section>
+
+      <section id="calendarView" class="view-panel hidden">
+        <div class="calendar-head">
+          <button id="prevMonthButton" type="button" aria-label="上个月">‹</button>
+          <h2 id="calendarTitle">月份</h2>
+          <button id="nextMonthButton" type="button" aria-label="下个月">›</button>
+        </div>
+        <div class="calendar-legend" aria-label="日历图例">
+          <span><i class="dot shoot-dot"></i>拍摄</span>
+          <span><i class="dot edit-dot"></i>剪辑</span>
+          <span><i class="dot release-dot"></i>发布</span>
+        </div>
+        <div class="calendar-weekdays" aria-hidden="true">
+          <span>周日</span><span>周一</span><span>周二</span><span>周三</span><span>周四</span><span>周五</span><span>周六</span>
+        </div>
+        <div class="calendar-grid" id="calendarGrid"></div>
+      </section>
+    </main>
+
+    <dialog id="projectDialog">
+      <form id="projectForm" method="dialog">
+        <header class="dialog-head">
+          <h2 id="dialogTitle">新增片子</h2>
+          <button class="icon-button" id="closeDialogButton" type="button" aria-label="关闭">×</button>
+        </header>
+        <input id="projectId" type="hidden" />
+        <div class="form-grid">
+          <fieldset>
+            <legend>基础信息</legend>
+            <label>项目名<input id="titleInput" required /></label>
+            <label>片子类型<select id="typeInput"></select></label>
+            <label>编导<select id="directorInput"></select></label>
+            <label>出镜人<select id="talentInput"></select></label>
+            <label>项目状态<select id="statusInput"></select></label>
+          </fieldset>
+          <fieldset>
+            <legend>拍摄与脚本</legend>
+            <label>拍摄日期<input id="shootDateInput" type="date" /></label>
+            <label>拍摄内容<textarea id="shootContentInput" rows="3"></textarea></label>
+            <label>脚本文档<input id="scriptDocInput" placeholder="链接或说明" /></label>
+            <label>脚本状态<select id="scriptStatusInput"></select></label>
+          </fieldset>
+          <fieldset>
+            <legend>剪辑</legend>
+            <label>剪辑开始<input id="editStartInput" type="date" /></label>
+            <label>剪辑结束<input id="editEndInput" type="date" /></label>
+            <label>剪辑内容<textarea id="editContentInput" rows="3"></textarea></label>
+          </fieldset>
+          <fieldset>
+            <legend>确认与发布</legend>
+            <label>编导确认<select id="directorConfirmInput"></select></label>
+            <label>发布日期<input id="releaseDateInput" type="date" /></label>
+            <label>发布账号<select id="releaseAccountInput"></select></label>
+            <label>发布状态<select id="releaseStatusInput"></select></label>
+            <label>抖音点赞<input id="douyinLikesInput" inputmode="numeric" placeholder="0" /></label>
+            <label>视频号点赞<input id="videoLikesInput" inputmode="numeric" placeholder="0" /></label>
+            <label>小红书点赞<input id="redbookLikesInput" inputmode="numeric" placeholder="0" /></label>
+            <label>备注<textarea id="notesInput" rows="3"></textarea></label>
+          </fieldset>
+        </div>
+        <p class="form-error" id="formError" role="alert"></p>
+        <footer class="dialog-actions">
+          <button class="danger-button" id="deleteProjectButton" type="button">删除</button>
+          <span></span>
+          <button id="cancelButton" type="button">取消</button>
+          <button class="primary-button" type="submit">保存</button>
+        </footer>
+      </form>
+    </dialog>
+
+    <dialog id="quickAddDialog" class="quick-dialog">
+      <form method="dialog">
+        <header class="dialog-head">
+          <div>
+            <p class="eyebrow">快捷添加</p>
+            <h2 id="quickAddTitle">选择任务类型</h2>
+          </div>
+          <button class="icon-button" id="closeQuickAddButton" type="button" aria-label="关闭">×</button>
+        </header>
+        <div class="quick-options">
+          <button class="quick-option shoot-option" data-kind="shoot" type="button">
+            <strong>拍摄</strong>
+            <span>把这天填入拍摄日期</span>
+          </button>
+          <button class="quick-option edit-option" data-kind="edit" type="button">
+            <strong>剪辑</strong>
+            <span>把这天填入剪辑开始和结束</span>
+          </button>
+          <button class="quick-option release-option" data-kind="release" type="button">
+            <strong>发布</strong>
+            <span>把这天填入发布日期</span>
+          </button>
+        </div>
+      </form>
+    </dialog>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
