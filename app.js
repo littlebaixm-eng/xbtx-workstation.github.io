@@ -230,10 +230,11 @@ async function loadCloudWorkspace() {
 async function saveCloudWorkspaceNow() {
   if (!state.cloudReady) return;
   setCloudStatus("正在保存云端");
-  const response = await fetch(`${CLOUD_ENDPOINT}?id=eq.${CLOUD_ROW_ID}`, {
-    method: "PATCH",
-    headers: cloudHeaders({ Prefer: "return=minimal" }),
+  const response = await fetch(`${CLOUD_ENDPOINT}?on_conflict=id`, {
+    method: "POST",
+    headers: cloudHeaders({ Prefer: "resolution=merge-duplicates,return=minimal" }),
     body: JSON.stringify({
+      id: CLOUD_ROW_ID,
       projects: state.projects,
       options: state.customOptions,
       updated_at: new Date().toISOString(),
@@ -247,8 +248,16 @@ function queueCloudSave() {
   if (!state.cloudReady) return;
   window.clearTimeout(state.saveTimer);
   state.saveTimer = window.setTimeout(() => {
-    saveCloudWorkspaceNow().catch(() => setCloudStatus("云端保存失败，本机已保存"));
+    saveCloudWorkspaceNow().catch((error) => setCloudStatus(`${error.message}，本机已保存`));
   }, 500);
+}
+
+function isSampleProjectSet(projects) {
+  return projects.length === 1 && projects[0]?.title === "样例：今日拍摄";
+}
+
+function hasRealWorkspaceData(projects = state.projects, options = state.customOptions) {
+  return hasWorkspaceData(projects, options) && !isSampleProjectSet(projects);
 }
 
 async function syncCloudOnStart() {
@@ -258,7 +267,12 @@ async function syncCloudOnStart() {
     const cloudData = await loadCloudWorkspace();
     state.cloudReady = true;
 
-    if (hasWorkspaceData(cloudData.projects, cloudData.options)) {
+    if (hasRealWorkspaceData(localProjects, localOptions) && isSampleProjectSet(cloudData.projects)) {
+      await saveCloudWorkspaceNow();
+      return;
+    }
+
+    if (hasRealWorkspaceData(cloudData.projects, cloudData.options)) {
       state.projects = cloudData.projects;
       state.customOptions = cloudData.options;
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state.projects));
@@ -269,15 +283,21 @@ async function syncCloudOnStart() {
       return;
     }
 
-    if (hasWorkspaceData(localProjects, localOptions)) {
+    if (hasRealWorkspaceData(localProjects, localOptions)) {
       await saveCloudWorkspaceNow();
       return;
     }
 
+    if (isSampleProjectSet(localProjects)) {
+      state.projects = [];
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state.projects));
+      render();
+    }
+
     setCloudStatus("云端已连接");
-  } catch {
+  } catch (error) {
     state.cloudReady = false;
-    setCloudStatus("云端连接失败，本机保存中");
+    setCloudStatus(`${error.message || "云端连接失败"}，本机保存中`);
   }
 }
 
@@ -841,7 +861,6 @@ function init() {
   state.customOptions = loadOptions();
   state.projects = loadProjects();
   refreshOptionControls();
-  seedIfEmpty();
   bindEvents();
   render();
   syncCloudOnStart();
