@@ -9,6 +9,7 @@ import {
   buildCalendarEvents,
   createLibraryProjectDraft,
   evaluateViralStatus,
+  normalizeWorkspaceData,
   normalizeLikeCount,
   projectColorIndex,
   createProjectDraftForDate,
@@ -221,6 +222,19 @@ test("createLibraryProjectDraft creates an archive-only project without calendar
     editing: [],
     release: [],
   });
+});
+
+test("normalizeWorkspaceData safely restores cloud projects and custom options", () => {
+  const data = normalizeWorkspaceData({
+    projects: [{ title: "云端项目", type: "商业", douyinLikes: "3k" }],
+    options: { director: ["新编导"] },
+  });
+
+  assert.equal(data.projects.length, 1);
+  assert.equal(data.projects[0].title, "云端项目");
+  assert.equal(data.projects[0].douyinLikes, 3000);
+  assert.deepEqual(data.options, { director: ["新编导"] });
+  assert.deepEqual(normalizeWorkspaceData({ projects: "bad", options: null }), { projects: [], options: {} });
 });
 
 test("rescheduleProjectDate moves shooting and release dates", () => {

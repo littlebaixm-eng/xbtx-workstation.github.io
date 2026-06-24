@@ -286,6 +286,17 @@ function createLibraryProjectDraft() {
   });
 }
 
+function normalizeWorkspaceData(data = {}) {
+  const projects = Array.isArray(data.projects)
+    ? data.projects.map((project) => createProject(project))
+    : [];
+  const options = data.options && typeof data.options === "object" && !Array.isArray(data.options)
+    ? data.options
+    : {};
+
+  return { projects, options };
+}
+
 function rescheduleProjectDate(project, kind, sourceDate, targetDate) {
   if (kind === "shoot") {
     return createProject({ ...project, shootDate: targetDate });
@@ -327,6 +338,7 @@ export {
   getWeekday,
   isWeekday,
   mergeOptionList,
+  normalizeWorkspaceData,
   normalizeLikeCount,
   projectColorIndex,
   rescheduleProjectDate,

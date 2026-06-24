@@ -17,13 +17,19 @@ import {
   getDailyAgenda,
   getWeekday,
   mergeOptionList,
+  normalizeWorkspaceData,
   projectColorIndex,
   rescheduleProjectDate,
   validateProject,
-} from "./project-core.js";
+} from "./project-core.js?v=20260624-cloud-sync-4";
 
 const STORAGE_KEY = "video-schedule-projects-v1";
 const OPTIONS_STORAGE_KEY = "video-schedule-options-v1";
+const SUPABASE_URL = "https://zckbohautakqhkgynfwu.supabase.co";
+const SUPABASE_KEY = "sb_publishable_GAh9CazsIjqPs-i1Eh3Y7Q_DX1ChEdR";
+const CLOUD_ROW_ID = "main";
+const CLOUD_TABLE = "workstation_data";
+const CLOUD_ENDPOINT = `${SUPABASE_URL}/rest/v1/${CLOUD_TABLE}`;
 const ALL_STATUS = "全部状态";
 const ALL_TYPES = "全部类型";
 const ALL_ACCOUNTS = "全部账号";
@@ -44,10 +50,14 @@ const state = {
   currentView: "today",
   calendarDate: new Date(),
   quickAddDate: "",
+  cloudStatus: "正在连接云端",
+  cloudReady: false,
+  saveTimer: null,
 };
 
 const elements = {
   summaryText: document.querySelector("#summaryText"),
+  cloudStatusText: document.querySelector("#cloudStatusText"),
   addProjectButton: document.querySelector("#addProjectButton"),
   addArchiveButton: document.querySelector("#addArchiveButton"),
   addTodayButton: document.querySelector("#addTodayButton"),
@@ -172,6 +182,7 @@ function loadProjects() {
 
 function saveProjects() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state.projects));
+  queueCloudSave();
 }
 
 function loadOptions() {
@@ -187,6 +198,108 @@ function loadOptions() {
 
 function saveOptions() {
   localStorage.setItem(OPTIONS_STORAGE_KEY, JSON.stringify(state.customOptions));
+  queueCloudSave();
+}
+
+function cloudHeaders(extra = {}) {
+  return {
+    apikey: SUPABASE_KEY,
+    Authorization: `Bearer ${SUPABASE_KEY}`,
+    "Content-Type": "application/json",
+    ...extra,
+  };
+}
+
+function hasWorkspaceData(projects = state.projects, options = state.customOptions) {
+  return projects.length > 0 || Object.keys(options).length > 0;
+}
+
+function setCloudStatus(status) {
+  state.cloudStatus = status;
+  renderSummary();
+}
+
+async function loadCloudWorkspace() {
+  const response = await fetch(`${CLOUD_ENDPOINT}?id=eq.${CLOUD_ROW_ID}&select=projects,options`, {
+    headers: cloudHeaders(),
+  });
+  if (!response.ok) throw new Error(`云端读取失败：${response.status}`);
+  const rows = await response.json();
+  return normalizeWorkspaceData(rows[0] || {});
+}
+
+async function saveCloudWorkspaceNow() {
+  if (!state.cloudReady) return;
+  setCloudStatus("正在保存云端");
+  const response = await fetch(`${CLOUD_ENDPOINT}?on_conflict=id`, {
+    method: "POST",
+    headers: cloudHeaders({ Prefer: "resolution=merge-duplicates,return=minimal" }),
+    body: JSON.stringify({
+      id: CLOUD_ROW_ID,
+      projects: state.projects,
+      options: state.customOptions,
+      updated_at: new Date().toISOString(),
+    }),
+  });
+  if (!response.ok) throw new Error(`云端保存失败：${response.status}`);
+  setCloudStatus("云端已保存");
+}
+
+function queueCloudSave() {
+  if (!state.cloudReady) return;
+  window.clearTimeout(state.saveTimer);
+  state.saveTimer = window.setTimeout(() => {
+    saveCloudWorkspaceNow().catch((error) => setCloudStatus(`${error.message}，本机已保存`));
+  }, 500);
+}
+
+function isSampleProjectSet(projects) {
+  return projects.length === 1 && projects[0]?.title === "样例：今日拍摄";
+}
+
+function hasRealWorkspaceData(projects = state.projects, options = state.customOptions) {
+  return hasWorkspaceData(projects, options) && !isSampleProjectSet(projects);
+}
+
+async function syncCloudOnStart() {
+  try {
+    const localProjects = [...state.projects];
+    const localOptions = { ...state.customOptions };
+    const cloudData = await loadCloudWorkspace();
+    state.cloudReady = true;
+
+    if (hasRealWorkspaceData(localProjects, localOptions) && isSampleProjectSet(cloudData.projects)) {
+      await saveCloudWorkspaceNow();
+      return;
+    }
+
+    if (hasRealWorkspaceData(cloudData.projects, cloudData.options)) {
+      state.projects = cloudData.projects;
+      state.customOptions = cloudData.options;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state.projects));
+      localStorage.setItem(OPTIONS_STORAGE_KEY, JSON.stringify(state.customOptions));
+      refreshOptionControls();
+      render();
+      setCloudStatus("云端已同步");
+      return;
+    }
+
+    if (hasRealWorkspaceData(localProjects, localOptions)) {
+      await saveCloudWorkspaceNow();
+      return;
+    }
+
+    if (isSampleProjectSet(localProjects)) {
+      state.projects = [];
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state.projects));
+      render();
+    }
+
+    setCloudStatus("云端已连接");
+  } catch (error) {
+    state.cloudReady = false;
+    setCloudStatus(`${error.message || "云端连接失败"}，本机保存中`);
+  }
 }
 
 function isoFromDate(date) {
@@ -225,6 +338,10 @@ function filteredProjects() {
 function renderSummary() {
   const visibleCount = filteredProjects().length;
   elements.summaryText.textContent = `${state.projects.length} 个项目，项目库显示 ${visibleCount} 个`;
+  elements.cloudStatusText.textContent = state.cloudStatus;
+  elements.cloudStatusText.className = `cloud-status ${
+    state.cloudStatus.includes("失败") ? "cloud-error" : "cloud-ok"
+  }`;
 }
 
 function createMeta(label, value) {
@@ -749,9 +866,9 @@ function init() {
   state.customOptions = loadOptions();
   state.projects = loadProjects();
   refreshOptionControls();
-  seedIfEmpty();
   bindEvents();
   render();
+  syncCloudOnStart();
 }
 
 init();

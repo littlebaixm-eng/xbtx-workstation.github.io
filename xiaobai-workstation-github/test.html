@@ -42,6 +42,7 @@
         createLibraryProjectDraft,
         evaluateViralStatus,
         normalizeLikeCount,
+        normalizeWorkspaceData,
         projectColorIndex,
         createProjectDraftForDate,
         createProject,
@@ -112,6 +113,18 @@
         assertEqual(project.releaseDate, "");
         assertDeepEqual(buildCalendarEvents([project]), []);
         assertDeepEqual(getDailyAgenda([project], "2026-06-24"), { shooting: [], editing: [], release: [] });
+      });
+
+      test("cloud workspace data restores safely", () => {
+        const data = normalizeWorkspaceData({
+          projects: [{ title: "云端项目", type: "商业", douyinLikes: "3k" }],
+          options: { director: ["新编导"] },
+        });
+        assertEqual(data.projects.length, 1);
+        assertEqual(data.projects[0].title, "云端项目");
+        assertEqual(data.projects[0].douyinLikes, 3000);
+        assertDeepEqual(data.options, { director: ["新编导"] });
+        assertDeepEqual(normalizeWorkspaceData({ projects: "bad", options: null }), { projects: [], options: {} });
       });
 
       test("选项匹配工作流名单", () => {
