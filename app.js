@@ -21,7 +21,7 @@ import {
   projectColorIndex,
   rescheduleProjectDate,
   validateProject,
-} from "./project-core.js";
+} from "./project-core.js?v=20260624-cloud-sync-4";
 
 const STORAGE_KEY = "video-schedule-projects-v1";
 const OPTIONS_STORAGE_KEY = "video-schedule-options-v1";
